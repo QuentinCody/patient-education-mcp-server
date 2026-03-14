@@ -28,8 +28,10 @@ export const patedCatalog: ApiCatalog = {
         "- DailyMed SPLs contain structured product labeling with all FDA drug label sections\n" +
         "- Pill identification: search DailyMed SPLs by imprint, color, shape, size\n" +
         "- Both APIs are free, public, and require no authentication\n" +
-        "- MedlinePlus responses use an Atom/JSON feed format with entries under feed.entry\n" +
-        "- DailyMed responses wrap results in a {data: [...], metadata: {...}} envelope",
+        "- MedlinePlus responses are pre-flattened into { code_system, code, total, topics: [{title, url, summary}] }\n" +
+        "- MedlinePlus audience: pass informationRecipient='PAT' (patient, default) or 'PROV' (provider) as a query param for different reading levels\n" +
+        "- DailyMed individual SPL detail (e.g. /dailymed/v2/spls/{setid}.json) is auto-converted from XML to structured JSON with labeled sections\n" +
+        "- DailyMed list/search responses wrap results in a {data: [...], metadata: {...}} envelope",
     endpoints: [
         // ============================================================
         // MedlinePlus Connect — Health Topics by Medical Code
@@ -253,7 +255,8 @@ export const patedCatalog: ApiCatalog = {
             method: "GET",
             path: "/dailymed/v2/spls/{setid}.json",
             summary:
-                "Get detailed drug label (SPL) by Set ID. Returns all label sections including indications, dosage, warnings, and adverse reactions.",
+                "Get detailed drug label (SPL) by Set ID. Returns all label sections including indications, dosage, warnings, and adverse reactions. " +
+                "Note: DailyMed only serves this endpoint as XML; the adapter transparently converts it to JSON with labeled sections.",
             category: "dailymed",
             pathParams: [
                 {
