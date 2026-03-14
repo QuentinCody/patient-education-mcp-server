@@ -153,8 +153,7 @@ function extractAllText(block: string): string {
 
     // Collect all <text>...</text> blocks (including nested subsection text)
     const textRegex = /<text>([\s\S]*?)<\/text>/g;
-    let tm: RegExpExecArray | null;
-    while ((tm = textRegex.exec(block)) !== null) {
+    for (let tm = textRegex.exec(block); tm !== null; tm = textRegex.exec(block)) {
         const stripped = stripTags(tm[1]);
         if (stripped) parts.push(stripped);
     }
@@ -180,10 +179,9 @@ function extractTopLevelSections(xml: string): string[] {
     // Split on top-level <component> boundaries within structuredBody.
     // We find each <component> that directly contains a <section>.
     const componentRegex = /<component>\s*<section[\s>]/g;
-    let cm: RegExpExecArray | null;
     const starts: number[] = [];
 
-    while ((cm = componentRegex.exec(body)) !== null) {
+    for (let cm = componentRegex.exec(body); cm !== null; cm = componentRegex.exec(body)) {
         starts.push(cm.index);
     }
 
