@@ -6,7 +6,7 @@ interface QueryEnv {
     PATED_DATA_DO?: unknown;
 }
 
-export function registerQueryData(server: McpServer, env?: QueryEnv) {
+export function registerQueryData(server: McpServer, env?: QueryEnv): void {
     const handler = createQueryDataHandler("PATED_DATA_DO", "pated");
 
     server.registerTool(

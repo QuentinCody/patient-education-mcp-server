@@ -14,7 +14,7 @@ interface PatedEnv {
 }
 
 export class MyMCP extends McpAgent {
-    server: any = new McpServer({
+    server = new McpServer({
         name: "patient-education",
         version: "0.1.0",
     });
