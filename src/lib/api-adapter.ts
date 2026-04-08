@@ -18,7 +18,7 @@
  */
 
 import type { ApiFetchFn } from "@bio-mcp/shared/codemode/catalog";
-import { medlineFetch, dailymedFetch } from "./http";
+import { dailymedFetch } from "./http";
 
 /** Code system OID mapping for MedlinePlus Connect */
 const CODE_SYSTEM_OIDS: Record<string, string> = {
@@ -349,7 +349,7 @@ export function createPatedApiFetch(): ApiFetchFn {
                     topics,
                 },
             };
-        } else if (path.startsWith("/dailymed/") || path === "/dailymed") {
+        }if (path.startsWith("/dailymed/") || path === "/dailymed") {
             // Strip /dailymed prefix and route to DailyMed Services
             const dailymedPath = path.replace(/^\/dailymed/, "") || "/";
 
