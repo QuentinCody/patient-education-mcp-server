@@ -39,6 +39,8 @@ export function registerCodeMode(
     // Register the execute tool (V8 isolate via DynamicWorkerExecutor)
     const executeTool = createExecuteTool({
         prefix: "pated",
+        // Verifiable provenance: pated_execute results carry a _meta.citation.
+        source: { id: "pated", name: "Patient Education (MedlinePlus)", url: "https://medlineplus.gov" },
         catalog: patedCatalog,
         apiFetch,
         doNamespace: env.PATED_DATA_DO,
