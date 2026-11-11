@@ -18,70 +18,9 @@
  */
 
 import type { ApiFetchFn } from "@bio-mcp/shared/codemode/catalog";
+import { commercialMedlineFetch } from "./commercial-profile";
 import { dailymedFetch } from "./http";
-
-/** Code system OID mapping for MedlinePlus Connect */
-const CODE_SYSTEM_OIDS: Record<string, string> = {
-    "icd10": "2.16.840.1.113883.6.90",
-    "ndc": "2.16.840.1.113883.6.69",
-    "loinc": "2.16.840.1.113883.6.1",
-    "snomed": "2.16.840.1.113883.6.96",
-    "icd9": "2.16.840.1.113883.6.103",
-    "cpt": "2.16.840.1.113883.6.12",
-    "rxnorm": "2.16.840.1.113883.6.88",
-};
-
-/**
- * Parse a MedlinePlus virtual path and return the real query parameters.
- *
- * Virtual paths:
- *   /topic/icd10/{code}   → code system lookup
- *   /topic/ndc/{code}     → code system lookup
- *   /topic/loinc/{code}   → code system lookup
- *   /topic/snomed/{code}  → code system lookup
- *   /topic/icd9/{code}    → code system lookup
- *   /topic/cpt/{code}     → code system lookup
- *   /topic/rxnorm/{code}  → code system lookup
- */
-function buildMedlinePlusParams(
-    virtualPath: string,
-    requestParams?: Record<string, unknown>,
-): { path: string; params: Record<string, unknown> } {
-    // Match /topic/{codeSystem}/{code}
-    const topicMatch = virtualPath.match(/^\/topic\/(\w+)\/(.+)$/);
-    if (topicMatch) {
-        const codeSystem = topicMatch[1].toLowerCase();
-        const code = topicMatch[2];
-        const oid = CODE_SYSTEM_OIDS[codeSystem];
-
-        if (!oid) {
-            throw new Error(
-                `Unknown code system: ${codeSystem}. Supported: ${Object.keys(CODE_SYSTEM_OIDS).join(", ")}`,
-            );
-        }
-
-        return {
-            path: "/service",
-            params: {
-                "mainSearchCriteria.v.cs": oid,
-                "mainSearchCriteria.v.c": code,
-                "knowledgeResponseType": "application/json",
-                // Default to patient-level content; override with informationRecipient=PROV for provider-level
-                "informationRecipient": (requestParams?.informationRecipient as string) || "PAT",
-                ...requestParams,
-            },
-        };
-    }
-
-    // Fallback: pass through to /service with any provided params
-    return {
-        path: virtualPath === "/" ? "/service" : virtualPath,
-        params: {
-            knowledgeResponseType: "application/json",
-            ...requestParams,
-        },
-    };
-}
+import { medlineApiFetch } from "./medline";
 
 // ---------------------------------------------------------------------------
 // DailyMed SPL detail: XML → JSON conversion
@@ -280,7 +219,7 @@ function parseSplXml(xml: string): Record<string, unknown> {
 // ---------------------------------------------------------------------------
 
 /**
- * Create an ApiFetchFn that routes through medlineFetch/dailymedFetch.
+ * Create an ApiFetchFn routing through medlineApiFetch/dailymedFetch.
  * No auth needed — both APIs are public.
  */
 export function createPatedApiFetch(): ApiFetchFn {
@@ -289,67 +228,12 @@ export function createPatedApiFetch(): ApiFetchFn {
         const path = request.path;
 
         if (path.startsWith("/medline/") || path === "/medline") {
-            // Strip /medline prefix and route to MedlinePlus Connect
-            const medlinePath = path.replace(/^\/medline/, "") || "/";
-            const { path: realPath, params: realParams } = buildMedlinePlusParams(
-                medlinePath,
-                request.params,
-            );
-
-            // MedlinePlus Connect requires dotted parameter keys like
-            // mainSearchCriteria.v.cs AND values like application/json to be sent
-            // literally — NOT percent-encoded. restFetch's buildQueryString encodes
-            // dots in keys (%2E) and slashes in values (%2F) which breaks the API.
-            // Build the URL manually with completely raw keys and values.
-            // This is safe because MedlinePlus params only contain OIDs, medical
-            // codes, and "application/json" — none need encoding.
-            const qs = Object.entries(realParams)
-                .filter(([, v]) => v !== undefined && v !== null)
-                .map(([k, v]) => `${k}=${String(v)}`)
-                .join("&");
-            const fullUrl = `https://connect.medlineplus.gov${realPath}${qs ? `?${qs}` : ""}`;
-
-            const mlpResponse = await fetch(fullUrl, {
-                headers: {
-                    Accept: "application/json",
-                    "User-Agent": "patient-education-mcp-server/1.0",
-                },
-            });
-
-            if (!mlpResponse.ok) {
-                let errorBody: string;
-                try { errorBody = await mlpResponse.text(); } catch { errorBody = mlpResponse.statusText; }
-                const error = new Error(`HTTP ${mlpResponse.status}: ${errorBody.slice(0, 200)}`) as Error & { status: number; data: unknown };
-                error.status = mlpResponse.status;
-                error.data = errorBody;
-                throw error;
-            }
-
-            // Parse and flatten the MedlinePlus Atom/JSON feed into a clean structure.
-            // The raw feed has deeply nested _value wrappers that the staging pipeline
-            // can't flatten properly. Pre-process into a simple array of topic objects
-            // so both inline and staged responses have usable fields.
-            const mlpData = await mlpResponse.json() as Record<string, unknown>;
-            const feed = mlpData?.feed as Record<string, unknown> | undefined;
-            const entries = (feed?.entry ?? []) as Array<Record<string, unknown>>;
-
-            const topics = entries.map((e: Record<string, unknown>) => ({
-                title: (e.title as Record<string, unknown>)?._value ?? "",
-                url: ((e.link as Array<Record<string, unknown>>)?.[0])?.href ?? "",
-                summary: (e.summary as Record<string, unknown>)?._value ?? "",
-                updated: (e.updated as Record<string, unknown>)?._value ?? "",
-            }));
-
-            return {
-                status: 200,
-                data: {
-                    code_system: realParams["mainSearchCriteria.v.cs"],
-                    code: realParams["mainSearchCriteria.v.c"],
-                    total: topics.length,
-                    topics,
-                },
-            };
+            // License audit 2026-11-10: a reselling caller gets links only for
+            // A.D.A.M. and ASHP content (see ./commercial-profile). DailyMed
+            // drug labels (FDA SPL) are public and are not changed.
+            return request.licenseProfile === "commercial" ? commercialMedlineFetch(request) : medlineApiFetch(request);
         }if (path.startsWith("/dailymed/") || path === "/dailymed") {
+            if (request.method !== "GET" || request.body !== undefined) throw new Error("DailyMed routes support GET without a body; form POST is available for /medline/* only");
             // Strip /dailymed prefix and route to DailyMed Services
             const dailymedPath = path.replace(/^\/dailymed/, "") || "/";
 

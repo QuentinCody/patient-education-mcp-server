@@ -10,29 +10,18 @@
  */
 
 import type { ApiCatalog } from "@bio-mcp/shared/codemode/catalog";
+import { medlineEndpoints } from "./medline";
+import { patedNotes } from "./notes";
 
 export const patedCatalog: ApiCatalog = {
     name: "Patient Education (MedlinePlus + DailyMed)",
     baseUrl: "virtual://patient-education",
     version: "1.0",
     auth: "none",
-    endpointCount: 18,
-    notes:
-        "- This server wraps TWO public APIs via virtual path prefixes:\n" +
-        "  /medline/* routes to MedlinePlus Connect (https://connect.medlineplus.gov)\n" +
-        "  /dailymed/* routes to DailyMed Services (https://dailymed.nlm.nih.gov/dailymed/services)\n" +
-        "- MedlinePlus returns patient-friendly content suitable for discharge instructions and patient handouts\n" +
-        "- The adapter translates clean paths like /medline/topic/icd10/{code} into OID-based query params\n" +
-        "- Code system OIDs: ICD-10-CM=2.16.840.1.113883.6.90, NDC=2.16.840.1.113883.6.69, " +
-        "LOINC=2.16.840.1.113883.6.1, SNOMED-CT=2.16.840.1.113883.6.96\n" +
-        "- DailyMed SPLs contain structured product labeling with all FDA drug label sections\n" +
-        "- Pill identification: search DailyMed SPLs by imprint, color, shape, size\n" +
-        "- Both APIs are free, public, and require no authentication\n" +
-        "- MedlinePlus responses are pre-flattened into { code_system, code, total, topics: [{title, url, summary}] }\n" +
-        "- MedlinePlus audience: pass informationRecipient='PAT' (patient, default) or 'PROV' (provider) as a query param for different reading levels\n" +
-        "- DailyMed individual SPL detail (e.g. /dailymed/v2/spls/{setid}.json) is auto-converted from XML to structured JSON with labeled sections\n" +
-        "- DailyMed list/search responses wrap results in a {data: [...], metadata: {...}} envelope",
+    endpointCount: 18 + medlineEndpoints.length,
+    notes: patedNotes,
     endpoints: [
+        ...medlineEndpoints,
         // ============================================================
         // MedlinePlus Connect — Health Topics by Medical Code
         // ============================================================
